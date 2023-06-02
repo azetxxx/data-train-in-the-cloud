@@ -10,6 +10,8 @@ from taxifare.ml_logic.data import get_data_with_cache, clean_data, load_data_to
 from taxifare.ml_logic.model import initialize_model, compile_model, train_model, evaluate_model
 from taxifare.ml_logic.preprocessor import preprocess_features
 from taxifare.ml_logic.registry import load_model, save_model, save_results
+
+
 def preprocess(min_date:str = '2009-01-01', max_date:str = '2015-01-01') -> None:
     """
     - Query the raw dataset from Le Wagon's BigQuery dataset
@@ -32,19 +34,19 @@ def preprocess(min_date:str = '2009-01-01', max_date:str = '2015-01-01') -> None
         ORDER BY pickup_datetime
     """
 
-    # $CHA_BEGIN
-    # Retrieve data using `get_data_with_cache`
+    # YOUR CODE HERE✅
+
+    # Retrieve `query` data from BigQuery or from `data_query_cache_path` if the file already exists!
     data_query_cache_path = Path(LOCAL_DATA_PATH).joinpath("raw", f"query_{min_date}_{max_date}_{DATA_SIZE}.csv")
-    data_query = get_data_with_cache(
+        data_query = get_data_with_cache(
         query=query,
         gcp_project=GCP_PROJECT,
         cache_path=data_query_cache_path,
         data_has_header=True
     )
-    # $CHA_END
 
-    # Process data
-    # $CHA_BEGIN
+
+    # Clean data using data.py
     data_clean = clean_data(data_query)
 
     X = data_clean.drop("fare_amount", axis=1)
@@ -52,11 +54,12 @@ def preprocess(min_date:str = '2009-01-01', max_date:str = '2015-01-01') -> None
 
     X_processed = preprocess_features(X)
 
-    # $CHA_END
+
     # Load a DataFrame onto BigQuery containing [pickup_datetime, X_processed, y]
     # using data.load_data_to_bq()
-    # $CHA_BEGIN
-    data_processed_with_timestamp = pd.DataFrame(np.concatenate((
+    # YOUR CODE HERE✅
+
+        data_processed_with_timestamp = pd.DataFrame(np.concatenate((
         data_clean[["pickup_datetime"]],
         X_processed,
         y,
@@ -69,9 +72,11 @@ def preprocess(min_date:str = '2009-01-01', max_date:str = '2015-01-01') -> None
         table=f'processed_{DATA_SIZE}',
         truncate=True
     )
-    # $CHA_END
+
 
     print("✅ preprocess() done \n")
+
+
 def train(
         min_date:str = '2009-01-01',
         max_date:str = '2015-01-01',
@@ -98,8 +103,7 @@ def train(
     # Load processed data using `get_data_with_cache` in chronological order
     # Try it out manually on console.cloud.google.com first!
 
-    # $CHA_BEGIN
-    # Below, our columns are called ['_0', '_1'....'_66'] on BQ, student's column names may differ
+    # YOUR CODE HERE✅
     query = f"""
         SELECT * EXCEPT(_0)
         FROM {GCP_PROJECT}.{BQ_DATASET}.processed_{DATA_SIZE}
@@ -118,10 +122,8 @@ def train(
     if data_processed.shape[0] < 10:
         print("❌ Not enough processed data retrieved to train on")
         return None
-    # $CHA_END
 
-    # Create (X_train_processed, y_train, X_val_processed, y_val)
-    # $CHA_BEGIN
+    # Create (X_train_processed, X_val_processed) using `preprocessor.py`
     train_length = int(len(data_processed)*(1-split_ratio))
 
     data_processed_train = data_processed.iloc[:train_length, :].sample(frac=1).to_numpy()
@@ -132,10 +134,12 @@ def train(
 
     X_val_processed = data_processed_val[:, :-1]
     y_val = data_processed_val[:, -1]
-    # $CHA_END
+
+    ##################################################
 
     # Train model using `model.py`
-    # $CHA_BEGIN
+    # YOUR CODE HERE✅
+
     model = load_model()
 
     if model is None:
@@ -148,14 +152,18 @@ def train(
         patience=patience,
         validation_data=(X_val_processed, y_val)
     )
-    # $CHA_END
 
-    val_mae = np.min(history.history['val_mae'])
 
+    # Return the last value of the validation MAE
+    val_mae = metrics_val_list[-1]
+
+    # Save model and training params
     params = dict(
-        context="train",
-        training_set_size=DATA_SIZE,
-        row_count=len(X_train_processed),
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        patience=patience,
+        incremental=True,
+        chunk_size=CHUNK_SIZE
     )
 
     # Save results on the hard drive using taxifare.ml_logic.registry
@@ -167,6 +175,7 @@ def train(
     print("✅ train() done \n")
 
     return val_mae
+
 
 def evaluate(
         min_date:str = '2014-01-01',
@@ -186,7 +195,7 @@ def evaluate(
     max_date = parse(max_date).strftime('%Y-%m-%d') # e.g '2009-01-01'
 
     # Query your BigQuery processed table and get data_processed using `get_data_with_cache`
-    # $CHA_BEGIN
+    # YOUR CODE HERE✅
     query = f"""
         SELECT * EXCEPT(_0)
         FROM {GCP_PROJECT}.{BQ_DATASET}.processed_{DATA_SIZE}
@@ -200,7 +209,6 @@ def evaluate(
         cache_path=data_processed_cache_path,
         data_has_header=False
     )
-    # $CHA_END
 
     if data_processed.shape[0] == 0:
         print("❌ No data to evaluate on")
